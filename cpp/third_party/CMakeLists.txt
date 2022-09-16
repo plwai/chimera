@@ -2,7 +2,10 @@ set(third_party_folder "ThirdParty")
 
 find_package(Vulkan REQUIRED)
 
-add_library(vma INTERFACE)
+if(NOT TARGET vma)
+    add_library(vma INTERFACE)
+    target_include_directories(vma INTERFACE vma)
+endif()
 
 if(NOT TARGET glfw)
     option(GLFW_BUILD_EXAMPLES "" OFF)
@@ -14,4 +17,9 @@ if(NOT TARGET glfw)
     set_target_properties(update_mappings PROPERTIES FOLDER ${third_party_folder}/glfw)
 endif()
 
-target_include_directories(vma INTERFACE vma)
+if(NOT TARGET glm)
+    add_library(glm INTERFACE)
+    target_include_directories(glm INTERFACE glm)
+endif()
+
+
