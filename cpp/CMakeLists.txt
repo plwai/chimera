@@ -2,7 +2,7 @@
 
 project ("Chimera")
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 find_package(Vulkan REQUIRED)
 
@@ -12,6 +12,8 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
 
 add_subdirectory(third_party)
 add_subdirectory(renderer)
+add_subdirectory(shared_utils)
+
 set_property( DIRECTORY PROPERTY VS_STARTUP_PROJECT "ChimeraRenderer" )
 find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
 
