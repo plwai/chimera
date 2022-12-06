@@ -7,18 +7,25 @@
 #include <glm/mat4x4.hpp>
 
 #include <memory>
+#include <vulkanUtil.h>
 #include "renderer.h"
+
+#if defined(_DEBUG)
+    constexpr auto DEBUG_MODE = true;
+#else
+    constexpr auto DEBUG_MODE = false;
+#endif
 
 const int WINDOW_WIDTH = 1024;
 const int WINDOW_HEIGHT = 720;
 const char* APPLICATION_NAME = "Chimera Application";
 const char* VK_VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
 
-std::unique_ptr<VulkanInstance> vkInit(bool debugMode = false);
+std::shared_ptr<VulkanInstance> vkInit();
 void setupDebugMessenger(VkInstance instance, VkDebugUtilsMessengerEXT* debugMessenger);
 
-std::unique_ptr<VulkanInstance> vkInit(bool debugMode) {
-    auto vkInstance = std::make_unique<VulkanInstance>();
+std::shared_ptr<VulkanInstance> vkInit() {
+    auto vkInstance = std::make_shared<VulkanInstance>();
 
     const char** glfwExtensions;
     uint32_t extensionCount = 0;
@@ -28,7 +35,7 @@ std::unique_ptr<VulkanInstance> vkInit(bool debugMode) {
     std::vector<const char*> validationLayers;
     std::vector<const char*> extensions;
 
-    if (debugMode && !checkValidationLayerSupport()) {
+    if (DEBUG_MODE && !checkValidationLayerSupport()) {
         validationLayers.push_back(VK_VALIDATION_LAYER_NAME);
 
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -40,18 +47,29 @@ std::unique_ptr<VulkanInstance> vkInit(bool debugMode) {
     }
 
     createInstance(APPLICATION_NAME, extensions, validationLayers, &vkInstance.get()->instance);
-
-    if (debugMode) {
+    if (DEBUG_MODE) {
         setupDebugMessenger(vkInstance.get()->instance, &vkInstance.get()->debugMessenger);
     }
 
+    vkInstance.get()->validationLayers = validationLayers;
+
     return std::move(vkInstance);
+}
+
+std::shared_ptr<VulkanDevice> vkCreateDevice(std::shared_ptr<VulkanInstance> instance) {
+    auto vkDevice = std::make_shared<VulkanDevice>();
+
+    createPhysicalDevice(instance.get()->instance, &vkDevice.get()->physicalDevice);
+    createLogicalDevice(instance.get(), vkDevice.get(), DEBUG_MODE);
+
+    return std::move(vkDevice);
 }
 
 void setupDebugMessenger(VkInstance instance, VkDebugUtilsMessengerEXT* debugMessenger) {
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageSeverity = //VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
     createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = debugCallback;
 
@@ -65,7 +83,8 @@ int main() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Chimera", nullptr, nullptr);
 
-    auto vk = vkInit(true);
+    auto vk = vkInit();
+    auto device = vkCreateDevice(vk);
     auto renderer = std::make_unique<Renderer>();
 
     while (!glfwWindowShouldClose(window)) {
@@ -73,6 +92,8 @@ int main() {
     }
 
     renderer.release();
+    device.reset();
+    vk.reset();
 
     glfwDestroyWindow(window);
 

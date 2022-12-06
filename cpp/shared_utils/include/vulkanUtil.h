@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 #include <deque>
 #include <functional>
+#include <optional>
 
 #define VK_CHECK(value) CHECK(value == VK_SUCCESS, __FILE__, __LINE__);
 
@@ -21,15 +22,21 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 }
 
-bool checkValidationLayerSupport();
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
-
-void createInstance(const char* appName, const std::vector<const char*>& extensions, const std::vector<const char*>& layers, VkInstance* instance);
-void createPhysicalDevice(VkPhysicalDevice* physicalDevice);
-
 struct VulkanInstance {
 	VkInstance instance;
+	std::vector<const char*> validationLayers;
 	VkDebugUtilsMessengerEXT debugMessenger;
+};
+
+struct VulkanDevice {
+	VkPhysicalDevice physicalDevice;
+	VkQueue graphicsQueue;
+	VkDevice device;
+	std::shared_ptr<VulkanInstance> instance;
+};
+
+struct QueueFamilyIndices {
+	std::optional<uint32_t> graphicsFamily;
 };
 
 struct DeletionQueue
@@ -43,9 +50,16 @@ struct DeletionQueue
 	void flush() {
 		// reverse iterate the deletion queue to execute all the functions
 		for (auto it = deletors.rbegin(); it != deletors.rend(); it++) {
-			(*it)(); 
+			(*it)();
 		}
 
 		deletors.clear();
 	}
 };
+
+bool checkValidationLayerSupport();
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
+
+void createInstance(const char* appName, const std::vector<const char*>& extensions, const std::vector<const char*>& layers, VkInstance* instance);
+void createPhysicalDevice(VkInstance instance, VkPhysicalDevice* physicalDevice);
+void createLogicalDevice(VulkanInstance* instance, VulkanDevice* device, bool enableValidationLayers);
