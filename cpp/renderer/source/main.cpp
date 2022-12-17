@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <vulkanUtil.h>
+#include <vulkanDevice.h>
 #include "renderer.h"
 
 #if defined(_DEBUG)
@@ -21,11 +22,13 @@ const int WINDOW_HEIGHT = 720;
 const char* APPLICATION_NAME = "Chimera Application";
 const char* VK_VALIDATION_LAYER_NAME = "VK_LAYER_KHRONOS_validation";
 
-std::shared_ptr<VulkanInstance> vkInit();
+std::shared_ptr<VulkanInstance> vkInit(GLFWwindow* window);
 void setupDebugMessenger(VkInstance instance, VkDebugUtilsMessengerEXT* debugMessenger);
 
-std::shared_ptr<VulkanInstance> vkInit() {
-    auto vkInstance = std::make_shared<VulkanInstance>();
+std::shared_ptr<VulkanInstance> vkInit(GLFWwindow* window) {
+    VkInstance instance;
+    VkDebugUtilsMessengerEXT debugMessenger;
+    VkSurfaceKHR surface;
 
     const char** glfwExtensions;
     uint32_t extensionCount = 0;
@@ -46,21 +49,23 @@ std::shared_ptr<VulkanInstance> vkInit() {
         extensions.push_back(glfwExtensions[i]);
     }
 
-    createInstance(APPLICATION_NAME, extensions, validationLayers, &vkInstance.get()->instance);
+    createInstance(APPLICATION_NAME, extensions, validationLayers, &instance);
     if (DEBUG_MODE) {
-        setupDebugMessenger(vkInstance.get()->instance, &vkInstance.get()->debugMessenger);
+        setupDebugMessenger(instance, &debugMessenger);
     }
 
-    vkInstance.get()->validationLayers = validationLayers;
+    createSurface(window, instance, &surface);
 
+    auto vkInstance = std::make_shared<VulkanInstance>(instance, surface, validationLayers, debugMessenger);
     return std::move(vkInstance);
 }
 
 std::shared_ptr<VulkanDevice> vkCreateDevice(std::shared_ptr<VulkanInstance> instance) {
-    auto vkDevice = std::make_shared<VulkanDevice>();
+    VkPhysicalDevice physicalDevice;
 
-    createPhysicalDevice(instance.get()->instance, &vkDevice.get()->physicalDevice);
-    createLogicalDevice(instance.get(), vkDevice.get(), DEBUG_MODE);
+    createPhysicalDevice(instance.get(), &physicalDevice);
+
+    auto vkDevice = std::make_shared<VulkanDevice>(instance, physicalDevice);
 
     return std::move(vkDevice);
 }
@@ -83,7 +88,7 @@ int main() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Chimera", nullptr, nullptr);
 
-    auto vk = vkInit();
+    auto vk = vkInit(window);
     auto device = vkCreateDevice(vk);
     auto renderer = std::make_unique<Renderer>();
 

@@ -1,4 +1,9 @@
 #pragma once
+#define VK_USE_PLATFORM_WIN32_KHR
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 
 #include <vector>
 #include <cassert>
@@ -6,6 +11,7 @@
 #include <deque>
 #include <functional>
 #include <optional>
+#include <set>
 
 #define VK_CHECK(value) CHECK(value == VK_SUCCESS, __FILE__, __LINE__);
 
@@ -22,21 +28,31 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 }
 
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator); 
+
 struct VulkanInstance {
-	VkInstance instance;
+	VkInstance raw;
+	VkSurfaceKHR surface;
 	std::vector<const char*> validationLayers;
 	VkDebugUtilsMessengerEXT debugMessenger;
-};
 
-struct VulkanDevice {
-	VkPhysicalDevice physicalDevice;
-	VkQueue graphicsQueue;
-	VkDevice device;
-	std::shared_ptr<VulkanInstance> instance;
+	~VulkanInstance() {
+		if (static_cast<uint32_t>(validationLayers.size())) {
+			DestroyDebugUtilsMessengerEXT(raw, debugMessenger, nullptr);
+		}
+
+		vkDestroySurfaceKHR(raw, surface, nullptr);
+		vkDestroyInstance(raw, nullptr);
+	}
 };
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
+
+	bool isComplete() {
+		return graphicsFamily.has_value() && presentFamily.has_value();
+	}
 };
 
 struct DeletionQueue
@@ -61,5 +77,7 @@ bool checkValidationLayerSupport();
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
 
 void createInstance(const char* appName, const std::vector<const char*>& extensions, const std::vector<const char*>& layers, VkInstance* instance);
-void createPhysicalDevice(VkInstance instance, VkPhysicalDevice* physicalDevice);
-void createLogicalDevice(VulkanInstance* instance, VulkanDevice* device, bool enableValidationLayers);
+void createSurface(GLFWwindow* window, VkInstance instance, VkSurfaceKHR* surface);
+void createPhysicalDevice(VulkanInstance* instance, VkPhysicalDevice* physicalDevice);
+
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface);

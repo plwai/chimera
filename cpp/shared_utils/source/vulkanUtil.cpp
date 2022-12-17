@@ -22,6 +22,13 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
 	}
 }
 
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	}
+}
+
 bool checkValidationLayerSupport() {
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -55,6 +62,15 @@ void createInstance(const char* appName, const std::vector<const char*>& extensi
 	VK_CHECK(vkCreateInstance(&createInfo, nullptr, instance));
 }
 
+void createSurface(GLFWwindow* window, VkInstance instance, VkSurfaceKHR* surface) {
+	VkWin32SurfaceCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	createInfo.hwnd = glfwGetWin32Window(window);
+	createInfo.hinstance = GetModuleHandle(nullptr);
+
+	VK_CHECK(vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, surface));
+}
+
 VkPhysicalDeviceType getDeviceScore(VkPhysicalDevice device) {
 	VkPhysicalDeviceProperties deviceProperties;
 	VkPhysicalDeviceFeatures deviceFeatures;
@@ -65,7 +81,7 @@ VkPhysicalDeviceType getDeviceScore(VkPhysicalDevice device) {
 }
 
 
-QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
 	QueueFamilyIndices indices;
 
 	uint32_t queueFamilyCount = 0;
@@ -80,35 +96,42 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
 			indices.graphicsFamily = i;
 		}
 
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+		if (presentSupport) {
+			indices.presentFamily = i;
+		}
+
 		i++;
 	}
 
 	return indices;
 }
 
-bool isDeviceSuitable(VkPhysicalDevice device) {
-	QueueFamilyIndices indices = findQueueFamilies(device);
+bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface) {
+	QueueFamilyIndices indices = findQueueFamilies(device, surface);
 
 	return indices.graphicsFamily.has_value();
 }
 
-void createPhysicalDevice(VkInstance instance, VkPhysicalDevice* physicalDevice = VK_NULL_HANDLE) {
+void createPhysicalDevice(VulkanInstance* instance, VkPhysicalDevice* physicalDevice = VK_NULL_HANDLE) {
 	uint32_t deviceCount = 0;
 
-	VK_CHECK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
+	VK_CHECK(vkEnumeratePhysicalDevices(instance->raw, &deviceCount, nullptr));
 
 	if (deviceCount == 0) {
 		throw std::runtime_error("failed to find GPUs with Vulkan support!");
 	}
 
 	std::vector<VkPhysicalDevice> devices(deviceCount);
-	VK_CHECK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()));
+	VK_CHECK(vkEnumeratePhysicalDevices(instance->raw, &deviceCount, devices.data()));
 
 	VkPhysicalDeviceType minScore = VK_PHYSICAL_DEVICE_TYPE_MAX_ENUM;
 
 	for (const auto& device : devices) {
 		const VkPhysicalDeviceType currentDeviceScore = getDeviceScore(device);
-		if (minScore > currentDeviceScore && isDeviceSuitable(device)) {
+		if (minScore > currentDeviceScore && isDeviceSuitable(device, instance->surface)) {
 			*physicalDevice = device;
 			minScore = currentDeviceScore;
 		}
@@ -117,37 +140,4 @@ void createPhysicalDevice(VkInstance instance, VkPhysicalDevice* physicalDevice 
 	if (physicalDevice == VK_NULL_HANDLE) {
 		throw std::runtime_error("failed to find a suitable GPU!");
 	}
-}
-
-void createLogicalDevice(VulkanInstance* instance, VulkanDevice* device, bool enableValidationLayers) {
-	QueueFamilyIndices indices = findQueueFamilies(device->physicalDevice);
-
-	VkDeviceQueueCreateInfo queueCreateInfo{};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-	queueCreateInfo.queueCount = 1;
-
-	float queuePriority = 1.0f;
-	queueCreateInfo.pQueuePriorities = &queuePriority;
-
-	VkPhysicalDeviceFeatures deviceFeatures{};
-
-	VkDeviceCreateInfo createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1;
-
-	createInfo.pEnabledFeatures = &deviceFeatures;
-	createInfo.enabledExtensionCount = 0;
-
-	if (enableValidationLayers) {
-		createInfo.enabledLayerCount = static_cast<uint32_t>(instance->validationLayers.size());
-		createInfo.ppEnabledLayerNames = instance->validationLayers.data();
-	}
-	else {
-		createInfo.enabledLayerCount = 0;
-	}
-
-	VK_CHECK(vkCreateDevice(device->physicalDevice, &createInfo, nullptr, &device->device));
-	vkGetDeviceQueue(device->device, indices.graphicsFamily.value(), 0, &device->graphicsQueue);
 }
